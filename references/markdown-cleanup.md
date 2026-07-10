@@ -55,7 +55,56 @@ Offer:
 1. Extract TOC: `fitz.open(pdf).get_toc()`
 2. Match TOC entries to text positions in Markdown.
 3. Inject `#`/`##`/`###` at matched positions.
-4. Reference: [inject_headings_example.py](./inject_headings_example.py)
+4. Reference: [inject_headings_example.py](../scripts/inject_headings_example.py)
+
+### 2f. Route A Heading Recovery (PDF → Word → markitdown)
+
+**Trigger**: source was PDF converted via Route A, AND markitdown output has bullet-style headings (`* + 1.`, `* + - 1.`) or missing heading numbers.
+
+**Root cause**: Word auto-numbering (numId) is lost during markitdown conversion. Headings become unnumbered or render as nested list markers.
+
+**Recovery procedure**:
+
+1. **Extract Word heading data** (`python-docx`): for each paragraph with a Heading style, record `text`, `style.name`, and `numId` (from `paragraph._element.pPr.numPr`).
+2. **Distinguish real vs fake headings**: paragraphs with `numId` = real headings (need numbering); without `numId` = fake headings (demote to `**bold text**`).
+3. **Extract PDF TOC** (`fitz.open(pdf).get_toc()`) as ground truth for L1-L3 headings.
+4. **Deduplicate PDF TOC**: if same title appears at multiple levels, keep the one with smallest level value.
+5. **Sequential matching**: normalize titles (lowercase, strip punctuation), match MD headings to PDF TOC entries in order. Constraints:
+   - Short titles (`len < 12`): require `startswith` match with ≥70% length ratio + distance limit (≤3 entries ahead) to prevent false jumps.
+   - Unmatched headings at L4+: auto-number based on parent context.
+6. **Apply heading levels + numbering** to the markdown output.
+
+**Key pitfalls** (from Bangsow book case):
+- PDF bookmarks may contain typos → may need hardcoded corrections
+- PDF→Word conversion may shift heading levels for some chapters → handle with fallback auto-numbering
+- markitdown heading format is inconsistent: `##`=chapter, `####`=section, bullet list=subsection
+
+### 2g. Code Block Post-Processing (Technical/Programming Books)
+
+**Trigger**: source contains code examples (programming books, API docs, tutorials) AND code blocks show quality issues after conversion.
+
+**Common problems** (especially with docling Route B):
+1. **False positive code blocks**: non-code text wrapped in ``` fences (caused by layout model misdetecting font/background)
+2. **Missing language tags**: code blocks lack language identifier for syntax highlighting
+3. **Single-line code**: multi-line code collapsed into one line (newlines lost during PDF extraction)
+4. **Missing indentation**: block-structured code (if/for/while) has no indentation
+5. **Split code blocks**: PDF page breaks create two consecutive code blocks that should be one
+
+**Processing pipeline** (in order):
+1. **False positive removal**: Detect blocks where content is clearly prose (no code patterns like `:=`, `var`, function calls). Remove fences, restore as paragraph text.
+2. **Language tagging**: Identify language from content patterns (e.g., `:=` + `end` + `var` → SimTalk; `def` + `:` → Python). Add ` ```language ` tag.
+3. **Split block merging**: Find consecutive code blocks separated only by blank lines → merge into one.
+4. **Line break restoration**: Use language-specific syntax rules to re-insert newlines. Key signals:
+   - Statement terminators (`;`, line comments `--`/`//`/`#`)
+   - Declaration keywords (`var`, `local`, `param`, `def`, `int`)
+   - Control flow keywords with syntax validation (`if...then`, `for...to`)
+   - Assignment operators (`:=`, `=`)
+5. **Indentation**: Apply language-specific indentation rules based on block openers/closers.
+
+**Reference scripts** (reusable templates in the bangsow_pts_tutorial conversion):
+- `_fix_code_blocks.py`: false positive detection + language tagging
+- `_fix_linebreaks.py`: line break restoration + indentation (SimTalk-specific, adaptable to other languages)
+- `_merge_blocks.py`: consecutive code block merging
 
 ## Step 3 — Apply & Report
 

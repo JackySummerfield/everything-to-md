@@ -1,134 +1,95 @@
 # everything-to-md
 
-A Copilot Skill based on my experience that converts documents (PDF, Word, PPT, Excel, etc.) to high-quality Markdown — the essential first step for building knowledge bases, RAG pipelines, or any LLM-ready content. Provides multiple conversion routes with time estimates based on document size.
+Convert **anything** to high-quality Markdown — the essential first step for building knowledge bases, RAG pipelines, or LLM-ready content.
 
-## About
+## What it does
 
-- Copilot is built for **human-AI pair work** — AI does the heavy lifting, you review & steer.
-- Your company only pays for GitHub Copilot (definitely not the main reason 🤔).
-- No worries — Claude Code can use this skill too.
+| Input | Track | Method |
+|-------|-------|--------|
+| PDF, Word, PPT, Excel, HTML | **A** | markitdown / docling / pymupdf4llm / marker |
+| Video/audio URL (Bilibili, YouTube, Xiaohongshu…) | **B** | yt-dlp → subtitles/ASR → Markdown |
+| Local audio/video file | **C** | ASR (FunASR / whisper) → Markdown |
 
-### Why Markdown?
+## Quick Start
 
-- Markdown is for AI. HTML is for humans.
-- Saves tokens (definitely not the main reason 🤔).
-- No worries — you can always convert Markdown to HTML later.
+```bash
+# 1. Install
+pip install 'markitdown[all]'
 
-## Getting Started
+# 2. Use in VS Code Copilot Chat
+> Convert my PDF to markdown
+> 把这个B站链接转成markdown：https://www.bilibili.com/video/BVxxxxx
+> 视频转文字
+```
 
-### Prerequisites
+## Prerequisites
 
-- [VS Code](https://code.visualstudio.com/) 1.99+
-- [GitHub Copilot](https://marketplace.visualstudio.com/items?itemName=GitHub.copilot) extension (active subscription)
+- VS Code 1.99+ with GitHub Copilot
 - Python >= 3.10
 
-### Installation
+### Optional dependencies (install as needed)
 
-1. **Clone the skill into your Copilot skills directory**
+```bash
+# Document conversion routes
+pip install pdf2docx           # Route A2: PDF → Word → MD
+pip install docling            # Route B: PDF → ML-based MD (~500MB models)
+pip install pymupdf4llm        # Route C: PDF → fast rule-based MD
 
-   ```bash
-   # Windows
-   git clone https://github.com/JackySummerfield/everything-to-md.git "%USERPROFILE%\.copilot\skills\everything-to-md"
+# Media/audio (Track B & C)
+pip install yt-dlp imageio-ffmpeg
+pip install funasr torch torchaudio    # Chinese ASR (FunASR SenseVoice)
+pip install faster-whisper             # Multilingual ASR fallback
+pip install rapidocr-onnxruntime       # OCR for image posts
+```
 
-   # macOS / Linux
-   git clone https://github.com/JackySummerfield/everything-to-md.git ~/.copilot/skills/everything-to-md
-   ```
+## Architecture
 
-2. **Install core dependency**
+```
+User input → [Input-type Recognition] → Track A / B / C → _raw.md → Cleanup
+```
 
-   ```bash
-   pip install 'markitdown[all]'
-   ```
+The skill recognizes the input type, routes to the appropriate pipeline, produces an initial `_raw.md` draft, then offers interactive cleanup (noise removal, splitting, heading injection).
 
-3. **(Optional) Install route-specific dependencies**
+## Limitations & Honest Assessment
 
-   Choose based on your needs:
+| Capability | Status |
+|-----------|--------|
+| PDF/Word/PPT → Markdown | ✅ Reliable (multiple routes, battle-tested) |
+| Bilibili/YouTube with subtitles | ✅ High quality |
+| Chinese audio ASR (clear speech) | ⚠️ Usable but expect jargon errors |
+| Douyin/TikTok URL extraction | ❌ Unreliable (upstream anti-bot) |
+| Auto-summarization of transcripts | ❌ Rule-based = low quality. Use LLM instead |
 
-   ```bash
-   # Route A2: PDF → Word → Markdown (fully local, good quality)
-   pip install pdf2docx
-
-   # Route B: PDF → Docling → Markdown (ML-based, ~500MB models on first run)
-   pip install docling
-
-   # Route C: PDF → pymupdf4llm → Markdown (fastest, rule-based)
-   pip install pymupdf4llm
-
-   # Route D: PDF → Marker → Markdown (best quality, GPU required)
-   pip install marker-pdf
-   ```
-
-4. **Verify installation**
-
-   Open VS Code Copilot Chat and say:
-
-   ```
-   Convert my PDF to markdown
-   ```
-
-   If the skill responds with a file selection prompt and route options, it's working.
-
-## Usage
-
-Trigger the skill with any of these phrases:
-
-| Trigger | Description |
-|---------|-------------|
-| `Convert my PDF to markdown` | Start conversion workflow |
-| `文档转换` | 中文触发 |
-| `batch convert` | Convert multiple files |
-| `document cleanup` | Post-conversion noise removal |
-| `split document` | Split large MD by chapters |
-
-### Conversion Routes (PDF)
-
-| Route | Pipeline | Headings | Tables | Speed (CPU) | Notes |
-|-------|----------|----------|--------|-------------|-------|
-| **A1** | PDF → ilovepdf → DOCX → markitdown | ⭐⭐⭐ | ⭐⭐⭐ | manual + fast | Best quality. Not for confidential docs |
-| **A2** | PDF → pdf2docx → DOCX → markitdown | ⭐⭐⭐ | ⭐⭐ | ~2 s/page | Fully local |
-| **B** ★ | PDF → docling → MD | ⭐⭐ | ⭐⭐ | ~2 s/page | ML models. Auto-removes headers/footers |
-| **C** | PDF → pymupdf4llm → MD | ⭐ | ⭐⭐ | ~0.3 s/page | No ML. Fastest |
-| **D** | PDF → marker → MD | ⭐⭐⭐ | ⭐⭐⭐ | ~1 s/page (GPU) | ⚠️ GPU required |
-
-★ = recommended default
-
-### Features
-
-- Multiple conversion routes with time estimates
-- Batch conversion of all supported formats
-- Interactive noise removal (page numbers, headers/footers, copyright blocks)
-- Smart document splitting by chapter structure
-- PDF TOC heading injection for documents losing heading structure
-- Automatic INDEX.md generation with cross-links
-- Intermediate artifact preservation (each step outputs to distinct file)
+**Key insight**: This tool reliably produces *transcripts*, not *summaries*. For knowledge extraction from spoken content, the transcript is a starting point — feed it to an LLM for actual comprehension.
 
 ## File Structure
 
 ```
 everything-to-md/
-├── SKILL.md                          # Skill definition and workflow
-├── README.md                         # This file
-├── LICENSE                           # MIT license
+├── SKILL.md                        # Workflow definition for Copilot
+├── README.md                       # This file
 ├── references/
-│   └── optimization-checklist.md     # Noise detection patterns
+│   ├── markdown-cleanup.md         # Post-conversion cleanup procedures
+│   ├── media-url-to-md.md          # Track B/C pipeline details
+│   └── optimization-checklist.md   # Noise detection patterns
 └── scripts/
-    └── inject_headings_example.py    # PDF TOC heading injection reference
+    ├── fetch_media.py              # URL → metadata + audio/subtitles/images
+    ├── transcribe.py               # Subtitle-first → ASR transcription
+    ├── summarize_transcript.py     # Quality assessment + keyword extraction
+    ├── assemble_media_md.py        # Assemble final _raw.md
+    ├── term_glossary.json          # ASR error → correct term mapping
+    ├── convert_docling_batch.py    # Large-PDF batch conversion
+    ├── inject_headings_v2.py       # PDF TOC → Markdown headings
+    ├── split_recursive.py          # Split large MD by chapter
+    ├── merge_code_blocks.py        # Merge split code blocks
+    ├── fix_code_blocks_simtalk.py  # SimTalk-specific (domain)
+    └── fix_linebreaks_simtalk_v2.py # SimTalk-specific (domain)
 ```
 
-## Roadmap
+## Triggers
 
-- [ ] LLM-assisted page-by-page conversion for high-value documents
-- [ ] Auto-detect optimal route based on document characteristics
-- [ ] Support scanned PDF via OCR pipeline
-- [ ] Web page → Markdown conversion (Readability + Turndown)
-
-## Acknowledgments
-
-- [markitdown](https://github.com/microsoft/markitdown) — Microsoft's document-to-Markdown CLI
-- [docling](https://github.com/docling-project/docling) — IBM's ML-based document parser
-- [pymupdf4llm](https://github.com/pymupdf/RAG) — Fast rule-based PDF extraction
-- [Best-README-Template](https://github.com/othneildrew/Best-README-Template) — README structure reference
+`convert document`, `文档转换`, `知识库`, `PDF to markdown`, `batch convert`, `document cleanup`, `split document`, `B站`, `bilibili`, `小红书`, `xiaohongshu`, `video to markdown`, `audio to markdown`, `视频转文字`, `音频转文字`, `transcribe`
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT

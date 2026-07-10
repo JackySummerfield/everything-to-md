@@ -1,3 +1,13 @@
 __pycache__/
 *.pyc
 .DS_Store
+
+# Test/debug working directories
+scripts/_bili_test*/
+scripts/_test_out/
+
+# ASR intermediate files
+*.asr16k.wav
+
+# Converted cookie files
+cookies.netscape.txt
